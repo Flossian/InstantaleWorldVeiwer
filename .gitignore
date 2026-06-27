@@ -1,0 +1,19 @@
+# --- 公開してはいけない実ファイル（個別指定）---
+# 平文 XOR 鍵（"Instantale_Save_Key_2026"）を含むため公開しない
+assets/Common.cs
+# 実セーブ（NPC / プレイヤー / クエスト等の個人データを含む）— 公開しない
+assets/savedata_plain.json
+*.sav
+*.save
+
+# 念のため: 鍵や個人データの典型ファイル名も除外
+assets/*_plain.json
+assets/*.cs
+
+# ローカル作業物
+scratchpad/
+node_modules/
+.DS_Store
+InstantaleWorldVeiwer.code-workspace
+
+# 注意: assets/keyblob.json と tools/*.py は公開対象（追跡する）。

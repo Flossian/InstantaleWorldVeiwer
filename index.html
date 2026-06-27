@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Instantale World Viewer</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div class="app">
+  <div class="titlebar">
+    <span class="ttl"><b>Instantale World Viewer</b> — エリア接続相関図</span>
+    <span class="spacer"></span>
+    <span class="hint">GitHub Pages / クライアントサイド</span>
+  </div>
+  <div class="toolbar">
+    <button class="btn" id="reopen">ファイルを開く</button>
+    <button class="btn primary" id="toggle">facility表示: パネル</button>
+    <button class="btn" id="fit">フィット</button>
+    <button class="btn" id="relayout">再配置</button>
+    <span class="legend" id="legend"></span>
+  </div>
+  <div class="stage" id="stage">
+    <svg id="svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/></marker>
+        <marker id="arrowhi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--edge-hi)"/></marker>
+        <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#2c3340"/></pattern>
+      </defs>
+      <g id="world"><rect x="-4000" y="-4000" width="8000" height="8000" fill="url(#dots)"/>
+        <g id="clinks"></g><g id="edges"></g><g id="children"></g><g id="nodes"></g></g>
+    </svg>
+
+    <div class="inspect" id="inspect">
+      <h4 id="i-name">—</h4><div class="meta" id="i-id">id —</div>
+      <div class="row"><span>接続</span><b id="i-adj">—</b></div>
+      <div class="sub"><h5 id="i-subh">施設 / ダンジョン</h5><div id="i-sub"></div></div>
+    </div>
+
+    <div class="loader" id="loader">
+      <div class="card">
+        <h2>セーブを開く</h2>
+        <p>Instantale のセーブをドラッグ&ドロップするだけで表示します。パスフレーズは不要です。データはブラウザ内のみで処理され、サーバには送信されません。</p>
+        <div class="drop" id="drop">ここにセーブをドラッグ&ドロップ<br>またはクリックして選択</div>
+        <input type="file" id="file" style="display:none">
+        <div class="status" id="status"></div>
+        <div class="priv">復号はすべてブラウザ内（メモリ上）で完結し、ファイルはどこにも送信・保存されません。</div>
+      </div>
+    </div>
+  </div>
+  <div class="footer">セーブをドロップすると自動で復号（XOR・C# Common.cs 準拠）して表示します。すべてブラウザ内で完結し、サーバ送信はありません。</div>
+</div>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
