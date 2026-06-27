@@ -28,17 +28,18 @@ svg{display:block;width:100%;height:100%;touch-action:none;cursor:grab}svg.panni
 .edge{stroke:var(--edge);stroke-width:1.7;fill:none;transition:stroke .12s,opacity .12s}
 .edge.hi{stroke:var(--edge-hi);stroke-width:2.5}.edge.dim{opacity:.16}
 .clink{stroke:#4b5360;stroke-width:1.1;opacity:.7}
+.cedge{stroke:var(--fac);stroke-width:1.6;opacity:.55;fill:none}
 .node{cursor:pointer}.node .pill{stroke:#11151c;stroke-width:1.5;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
 .node .lab{font-size:12px;fill:#fff;dominant-baseline:central;pointer-events:none;font-weight:550}
 .node .id{font-size:9.5px;fill:rgba(255,255,255,.66);dominant-baseline:central;pointer-events:none;font-family:"Consolas",monospace}
 .node.dim{opacity:.26}.node.sel .pill{stroke:var(--ring);stroke-width:2.4}
 .startring{fill:none;stroke:var(--ring);stroke-width:1.6;stroke-dasharray:3 3;opacity:.85}
 .startbadge{font-size:9px;fill:var(--ring);dominant-baseline:central;text-anchor:middle;font-weight:700}
-.child .mk{stroke:#11151c;stroke-width:1.2}.child .clab{font-size:9px;fill:#c9d1de;dominant-baseline:central;pointer-events:none}
+.child{cursor:grab}.child .mk{stroke:#11151c;stroke-width:1.2}.child .clab{font-size:9px;fill:#c9d1de;dominant-baseline:central;pointer-events:none}
 .child.dim{opacity:.22}
 .footer{font-size:11px;color:var(--ink-dim);padding:7px 14px;background:var(--panel);border-top:1px solid var(--line)}
 .footer b{color:#aeb7c6;font-weight:600}
-.inspect{position:absolute;right:12px;top:12px;width:330px;max-width:82vw;max-height:78vh;overflow:auto;background:rgba(31,37,48,.96);border:1px solid var(--line);border-radius:10px;padding:15px 17px;backdrop-filter:blur(4px);display:none;box-shadow:0 8px 22px rgba(0,0,0,.4)}
+.inspect{position:absolute;right:12px;top:12px;width:330px;max-width:82vw;max-height:78vh;overflow:auto;background:rgba(31,37,48,.96);border:1px solid var(--line);border-radius:10px;padding:15px 17px;backdrop-filter:blur(4px);display:none;box-shadow:0 8px 22px rgba(0,0,0,.4);pointer-events:none}
 .inspect.on{display:block}.inspect h4{margin:0 0 3px;font-size:16px;color:#fff}
 .inspect .meta{font-size:12.5px;color:var(--ink-dim);margin-bottom:11px}
 .inspect .row{font-size:13.5px;display:flex;gap:7px;margin:4px 0;color:#cfd6e2}.inspect .row span{color:var(--ink-dim);min-width:48px}
@@ -47,6 +48,8 @@ svg{display:block;width:100%;height:100%;touch-action:none;cursor:grab}svg.panni
 .inspect .it{display:flex;align-items:center;gap:8px;font-size:13.5px;margin:5px 0}.inspect .it .mk{width:13px;height:13px;flex:0 0 auto}
 .inspect .it .mk.f{background:var(--fac);border-radius:2px}.inspect .it .mk.d{background:var(--dun);transform:rotate(45deg)}
 .inspect .it .tg{color:var(--ink-dim);flex:0 0 auto;margin-right:-3px;font-family:monospace}
+.inspect .phint{margin-top:11px;border-top:1px solid var(--line);padding-top:9px;font-size:11.5px;color:var(--accent)}
+.inspect .phint:empty{display:none}
 /* Loader */
 .loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(20,24,31,.86);backdrop-filter:blur(3px);z-index:5}
 .loader.off{display:none}
@@ -74,7 +77,7 @@ svg{display:block;width:100%;height:100%;touch-action:none;cursor:grab}svg.panni
   </div>
   <div class="toolbar">
     <button class="btn" id="reopen">ファイルを開く</button>
-    <button class="btn primary" id="toggle">facility表示: パネル</button>
+    <button class="btn primary" id="back" style="display:none">← エリア相関図に戻る</button>
     <button class="btn" id="fit">フィット</button>
     <button class="btn" id="relayout">再配置</button>
     <span class="legend" id="legend"></span>
@@ -87,13 +90,14 @@ svg{display:block;width:100%;height:100%;touch-action:none;cursor:grab}svg.panni
         <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#2c3340"/></pattern>
       </defs>
       <g id="world"><rect x="-4000" y="-4000" width="8000" height="8000" fill="url(#dots)"/>
-        <g id="clinks"></g><g id="edges"></g><g id="children"></g><g id="nodes"></g></g>
+        <g id="clinks"></g><g id="cedges"></g><g id="edges"></g><g id="children"></g><g id="nodes"></g></g>
     </svg>
 
     <div class="inspect" id="inspect">
       <h4 id="i-name">—</h4><div class="meta" id="i-id">id —</div>
       <div class="row"><span>接続</span><b id="i-adj">—</b></div>
       <div class="sub"><h5 id="i-subh">施設 / ダンジョン</h5><div id="i-sub"></div></div>
+      <div class="phint" id="i-hint"></div>
     </div>
 
     <div class="loader" id="loader">
@@ -153,28 +157,45 @@ function values(container) {
 }
 
 // ノード内の施設を、entrance_facility を根として connections を辿った
-// 階層（pre-order DFS）に並べ、各施設へ depth を付けて返す。
+// 階層（pre-order DFS）に並べ、各施設へ depth と一意な sid を付けて返す。
+// あわせて施設どうしの接続（相関図用エッジ・双方向・重複除去）も返す。
+//   areaId / nidx は sid を全体で一意にするための名前空間。
 // 施設は辞書（キー=id）想定。connections は同一ノード内の施設 id 配列（双方向）。
-function facilityHierarchy(node) {
+function facilityGraph(node, areaId, nidx) {
   const facs = node && node.facilities;
+  const mk = fid => `${areaId}:${nidx}:${fid}`;
   if (!facs || typeof facs !== 'object' || Array.isArray(facs)) {
-    // 想定外（配列など）はフラット扱い（depth=0）。
-    return values(facs).map(f => ({ f, depth: 0 }));
+    // 想定外（配列など）はフラット扱い（depth=0・エッジ無し）。
+    const items = values(facs).map((f, i) => ({ f, depth: 0, sid: mk(i) }));
+    return { items, edges: [] };
   }
-  const out = [];
+  const items = [];
   const visited = new Set();
   const visit = (fid, depth) => {
     const f = facs[fid];
     if (!f || visited.has(fid)) return;
     visited.add(fid);
-    out.push({ f, depth });
+    items.push({ f, depth, sid: mk(fid) });
     (f.connections || []).forEach(c => visit(String(c), depth + 1));
   };
   const ids = Object.keys(facs);
   const root = node.entrance_facility != null ? String(node.entrance_facility) : ids[0];
   visit(root, 0);
   ids.forEach(id => { if (!visited.has(id)) visit(id, 0); }); // 孤立施設は根として追加
-  return out;
+
+  // 施設間エッジ（connections 全件・無向で重複除去）。
+  const edges = [];
+  const seen = new Set();
+  ids.forEach(fid => {
+    (facs[fid].connections || []).forEach(c => {
+      const cid = String(c);
+      if (!facs[cid]) return;
+      const key = fid < cid ? fid + '|' + cid : cid + '|' + fid;
+      if (seen.has(key)) return; seen.add(key);
+      edges.push({ a: mk(fid), b: mk(cid) });
+    });
+  });
+  return { items, edges };
 }
 
 // 既に整形済み（areas が配列で label を持つ）かどうか。
@@ -190,13 +211,15 @@ function parseWorld(json) {
     return {
       areas: obj.areas.map(a => ({ id: Number(a.id), label: String(a.label ?? '#' + a.id), start: !!a.start })),
       edges: obj.edges.map(e => ({ a: Number(e.a), b: Number(e.b), ...(e.directed !== undefined ? { directed: !!e.directed } : {}) })),
-      children: (obj.children || []).map(c => ({ name: String(c.name ?? '?'), parent: Number(c.parent), kind: c.kind === 'd' ? 'd' : 'f', depth: Number(c.depth) || 0 })),
+      children: (obj.children || []).map((c, i) => ({ name: String(c.name ?? '?'), parent: Number(c.parent), kind: c.kind === 'd' ? 'd' : 'f', depth: Number(c.depth) || 0, sid: c.sid != null ? String(c.sid) : 'p' + i })),
+      childEdges: (obj.childEdges || []).map(e => ({ a: String(e.a), b: String(e.b) })),
     };
   }
 
   const rawAreas = values(obj.areas);
   const areas = [];
   const children = [];
+  const childEdges = [];        // 施設どうしの接続（相関図用・sid ペア）
   const seen = new Set();       // エッジ重複除去（"min-max"）
   const edges = [];
 
@@ -221,29 +244,34 @@ function parseWorld(json) {
       edges.push({ a: id, b });
     });
 
-    // 施設 / ダンジョン（nodes[*] の facilities を階層化）。
-    values(a.nodes).forEach(node => {
-      facilityHierarchy(node).forEach(({ f, depth }) => {
+    // 施設 / ダンジョン（nodes[*] の facilities を階層化 + 施設間エッジ）。
+    values(a.nodes).forEach((node, nidx) => {
+      const { items, edges: fEdges } = facilityGraph(node, id, nidx);
+      items.forEach(({ f, depth, sid }) => {
         children.push({
           name: String(f.name ?? '?'),
           parent: id,
           kind: f.facility_type === DUNGEON_FACILITY_TYPE ? 'd' : 'f',
           ftype: f.facility_type,
           depth,
+          sid,
         });
       });
+      fEdges.forEach(e => childEdges.push(e));
     });
   });
 
-  return { areas, edges, children };
+  return { areas, edges, children, childEdges };
 }
 
 // 中立データ → 表示用グラフ（hop/arm/col 付与, byId, adj, START, maxHop）。
 function buildGraph(data) {
   const areas = data.areas.map(a => ({ ...a }));
   const edges = data.edges.map(e => ({ ...e }));
-  const children = (data.children || []).map(c => ({ ...c }));
+  const children = (data.children || []).map((c, i) => ({ ...c, sid: c.sid != null ? String(c.sid) : 'c' + i }));
+  const childEdges = (data.childEdges || []).map(e => ({ a: String(e.a), b: String(e.b) }));
   const byId = Object.fromEntries(areas.map(n => [n.id, n]));
+  const childById = Object.fromEntries(children.map(c => [c.sid, c]));
 
   const START = byId[FIXED_START_ID] ? FIXED_START_ID : Math.min(...areas.map(a => a.id));
   areas.forEach(a => { a.start = (a.id === START); });
@@ -278,10 +306,9 @@ function buildGraph(data) {
     n.col = hopColor(n.hop, maxHop);
   });
 
-  let cseq = 0;
-  children.forEach(c => (c.cid = 'c' + (cseq++)));
+  children.forEach(c => (c.cid = c.sid));   // 反発計算用の識別子（sid を流用）
 
-  return { areas, edges, children, byId, adj, START, maxHop };
+  return { areas, edges, children, childEdges, byId, childById, adj, START, maxHop };
 }
 
 // ホップ数 → 色。開始は専用色、到達不能は灰、それ以外は色相ランプ。
@@ -338,9 +365,9 @@ function boundary(dx, dy, hw, hh) {
   return [dx * t, dy * t];
 }
 
-// 初期配置（放射状）。mode が 'subnode' のとき子ノードも親の周囲に配置。
+// エリア相関図の初期配置（開始ノード中心の放射状）。
 function seed(graph, W, H) {
-  const { areas, children, byId } = graph;
+  const { areas } = graph;
   const cx = W / 2, cy = H / 2, gap = 150;
   areas.forEach(n => {
     if (n.start) { n.x = cx; n.y = cy; }
@@ -351,31 +378,35 @@ function seed(graph, W, H) {
     }
     n.vx = 0; n.vy = 0; n.pin = false;
   });
-  const bp = {};
-  children.forEach(c => (bp[c.parent] = bp[c.parent] || []).push(c));
-  Object.values(bp).forEach(list => list.forEach((c, i) => {
-    const p = byId[c.parent];
-    if (!p) return;
-    const ang = (i / list.length) * 6.28 + 0.6;
-    c.x = p.x + Math.cos(ang) * 46;
-    c.y = p.y + Math.sin(ang) * 46;
-    c.vx = 0; c.vy = 0; c.pin = false;
-  }));
 }
 
-// 1 ステップ進める。alpha（温度）を受け取り、減衰後の alpha を返す。
-function step(graph, mode, alpha, W, H) {
-  const { areas, edges, children, byId } = graph;
-  const list = mode === 'subnode' ? [...areas, ...children] : areas;
+// サブノード相関図の初期配置。対象エリアを中心に固定し、子施設を周囲に並べる。
+function seedFocus(graph, area, W, H) {
+  const cx = W / 2, cy = H / 2;
+  area.x = cx; area.y = cy; area.vx = 0; area.vy = 0; area.pin = true;
+  const kids = graph.children.filter(c => c.parent === area.id);
+  kids.forEach((c, i) => {
+    const ang = (i / Math.max(1, kids.length)) * 6.28 + 0.4;
+    const r = 110 + (c.depth || 0) * 56;
+    c.x = cx + Math.cos(ang) * r + (Math.random() - 0.5) * 22;
+    c.y = cy + Math.sin(ang) * r + (Math.random() - 0.5) * 22;
+    c.vx = 0; c.vy = 0; c.pin = false;
+  });
+}
 
-  // 反発（全ペア）。子が絡むペアは反発を弱める。
-  for (let i = 0; i < list.length; i++) {
-    for (let j = i + 1; j < list.length; j++) {
-      const a = list[i], b = list[j];
+// 1 ステップ進める。focus が null ならエリア相関図、エリアならそのサブノード相関図。
+// alpha（温度）を受け取り、減衰後の alpha を返す。
+function step(graph, focus, alpha, W, H) {
+  if (focus) return stepFocus(graph, focus, alpha, W, H);
+
+  const { areas, edges, byId } = graph;
+  // 反発（全ペア）
+  for (let i = 0; i < areas.length; i++) {
+    for (let j = i + 1; j < areas.length; j++) {
+      const a = areas[i], b = areas[j];
       let dx = a.x - b.x, dy = a.y - b.y;
       let d2 = dx * dx + dy * dy; if (d2 < 1) d2 = 1;
-      const rep = (a.cid || b.cid) ? P.kRep * 0.42 : P.kRep;
-      const f = rep / d2, d = Math.sqrt(d2);
+      const f = P.kRep / d2, d = Math.sqrt(d2);
       a.vx += f * dx / d; a.vy += f * dy / d;
       b.vx -= f * dx / d; b.vy -= f * dy / d;
     }
@@ -389,35 +420,70 @@ function step(graph, mode, alpha, W, H) {
     a.vx += f * dx / d; a.vy += f * dy / d;
     b.vx -= f * dx / d; b.vy -= f * dy / d;
   });
-  // 子ノードのバネ（親へ）
-  if (mode === 'subnode') children.forEach(c => {
-    const p = byId[c.parent]; if (!p) return;
-    let dx = c.x - p.x, dy = c.y - p.y;
-    const d = Math.hypot(dx, dy) || 1;
-    const f = P.cK * (d - P.cRest);
-    c.vx -= f * dx / d; c.vy -= f * dy / d;
-    p.vx += f * dx / d * 0.25; p.vy += f * dy / d * 0.25;
-  });
-  // 中心引力
+  // 中心引力 + 速度反映
   areas.forEach(n => {
     const k = n.start ? P.kStart : P.kCenter;
     n.vx += (W / 2 - n.x) * k; n.vy += (H / 2 - n.y) * k;
-  });
-  // 速度反映
-  list.forEach(n => {
     if (n.pin) { n.vx = 0; n.vy = 0; return; }
     n.vx *= P.damp; n.vy *= P.damp;
     n.x += n.vx * alpha * 0.16; n.y += n.vy * alpha * 0.16;
   });
-
-  // 重なり解消（矩形ベース）はエリアのみ対象。施設（子ノード）は重なりを許容する。
   for (let it = 0; it < 2; it++) separate(areas);
 
   alpha *= 0.99;
   if (alpha < 0.03) alpha = 0.03;
   return alpha;
 }
-// view.js — SVG 描画と操作（選択 / パネル / パン・ズーム・フィット / ドラッグ / 子ノード切替）
+
+// サブノード相関図 1 ステップ。area を中心に固定し、その子施設のみを動かす。
+function stepFocus(graph, area, alpha, W, H) {
+  const { children, childEdges, childById } = graph;
+  const kids = children.filter(c => c.parent === area.id);
+  const list = [area, ...kids];
+
+  // 反発（全ペア・area 含む）
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j];
+      let dx = a.x - b.x, dy = a.y - b.y;
+      let d2 = dx * dx + dy * dy; if (d2 < 1) d2 = 1;
+      const f = P.kRep * 0.5 / d2, d = Math.sqrt(d2);
+      a.vx += f * dx / d; a.vy += f * dy / d;
+      b.vx -= f * dx / d; b.vy -= f * dy / d;
+    }
+  }
+  // 施設間エッジのバネ（このエリアの子のみ）
+  childEdges.forEach(e => {
+    const a = childById[e.a], b = childById[e.b];
+    if (!a || !b || a.parent !== area.id || b.parent !== area.id) return;
+    let dx = b.x - a.x, dy = b.y - a.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const f = P.cK * (d - P.cRest * 1.6);
+    a.vx += f * dx / d; a.vy += f * dy / d;
+    b.vx -= f * dx / d; b.vy -= f * dy / d;
+  });
+  // 入口施設（depth 0）→ エリア中心のバネ
+  kids.forEach(c => {
+    if (c.depth) return;
+    let dx = c.x - area.x, dy = c.y - area.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const f = P.cK * (d - 100);
+    c.vx -= f * dx / d; c.vy -= f * dy / d;
+  });
+  // 子の速度反映（area はドラッグ/アンカーのため積分対象外＝位置は据え置き）
+  kids.forEach(n => {
+    n.vx += (W / 2 - n.x) * 0.002; n.vy += (H / 2 - n.y) * 0.002;
+    if (n.pin) { n.vx = 0; n.vy = 0; return; }
+    n.vx *= P.damp; n.vy *= P.damp;
+    n.x += n.vx * alpha * 0.16; n.y += n.vy * alpha * 0.16;
+  });
+  for (let it = 0; it < 2; it++) separate(list);
+
+  alpha *= 0.99;
+  if (alpha < 0.03) alpha = 0.03;
+  return alpha;
+}
+// view.js — SVG 描画と操作（ホバーでパネル / クリックでサブノード相関図へ / パン・ズーム・フィット・ドラッグ）
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -425,11 +491,11 @@ class Viewer {
   constructor(root = document) {
     this.$ = id => root.getElementById(id);
     this.NS = this.$('nodes'); this.ES = this.$('edges');
-    this.CN = this.$('children'); this.CL = this.$('clinks');
+    this.CN = this.$('children'); this.CL = this.$('clinks'); this.CE = this.$('cedges');
     this.WORLD = this.$('world'); this.SVG = this.$('svg'); this.STAGE = this.$('stage');
 
     this.g = null;                                   // 現在のグラフ
-    this.mode = 'panel';                             // 'panel' | 'subnode'
+    this.focus = null;                               // null = エリア相関図 / エリア = そのサブノード相関図
     this.view = { x: 0, y: 0, k: 1 };
     this.W = 900; this.H = 560;
     this.alpha = 1; this.running = false;
@@ -445,10 +511,11 @@ class Viewer {
 
   // 中立データを受け取って描画開始。
   load(data) {
-    this.NS.innerHTML = ''; this.ES.innerHTML = ''; this.CN.innerHTML = ''; this.CL.innerHTML = '';
+    this.NS.innerHTML = ''; this.ES.innerHTML = ''; this.CN.innerHTML = ''; this.CL.innerHTML = ''; this.CE.innerHTML = '';
     this.g = buildGraph(data);
-    this._buildLegend(); this._buildAreas(); this._buildAreaEdges(); this._buildChildren();
-    this.setMode('panel'); this._seed(); this.applyView(); this.render(); this.fit();
+    this._buildLegend(); this._buildAreas(); this._buildAreaEdges(); this._buildChildren(); this._buildChildEdges();
+    this.focus = null; this._showWorld();
+    this._seed(); this.applyView(); this.render(); this.fit();
     if (!this.running) { this.running = true; requestAnimationFrame(() => this._tick()); }
   }
 
@@ -500,8 +567,9 @@ class Viewer {
         n.el.g.append(ring, bg);
       }
       n.el.g.addEventListener('pointerdown', e => this._startDragNode(e, n));
-      // 選択/フォーカスは pointerup 側で判定する（SVG がポインタキャプチャ中は
-      // click / dblclick がノードではなく SVG に飛ぶため、ここでは拾えない）。
+      // マウスオーバーでパネル表示（エリア相関図のときのみ）。クリック確定は pointerup 側。
+      n.el.g.addEventListener('mouseenter', e => { if (!this.focus && !this.drag) this.hoverNode(n, e.clientX, e.clientY); });
+      n.el.g.addEventListener('mouseleave', () => { if (!this.focus && !this.drag) this.clearHover(); });
     });
   }
 
@@ -533,18 +601,27 @@ class Viewer {
       const lab = document.createElementNS(SVGNS, 'text'); lab.setAttribute('class', 'clab');
       lab.setAttribute('x', 12); lab.setAttribute('y', 0); lab.textContent = c.name;
       g.append(mk, lab); this.CN.append(g); c.el = { g };
+      c.hw = 11; c.hh = 11;                        // 重なり解消・フィット用の概算サイズ
+      g.addEventListener('pointerdown', e => this._startDragNode(e, c));  // サブノード相関図でドラッグ移動
       const ln = document.createElementNS(SVGNS, 'line'); ln.setAttribute('class', 'clink'); this.CL.append(ln); c.link = ln;
       g.style.display = 'none'; ln.style.display = 'none';
     });
   }
 
+  _buildChildEdges() {
+    this.g.childEdges.forEach(e => {
+      const ln = document.createElementNS(SVGNS, 'line'); ln.setAttribute('class', 'cedge');
+      this.CE.append(ln); e.el = ln; ln.style.display = 'none';
+    });
+  }
+
   _tick() {
-    if (this.g) { this.alpha = step(this.g, this.mode, this.alpha, this.W, this.H); this.render(); }
+    if (this.g) { this.alpha = step(this.g, this.focus, this.alpha, this.W, this.H); this.render(); }
     requestAnimationFrame(() => this._tick());
   }
 
   render() {
-    const { areas, edges, children, byId } = this.g;
+    const { areas, edges, byId, childById } = this.g;
     areas.forEach(n => n.el.g.setAttribute('transform', `translate(${n.x},${n.y})`));
     edges.forEach(ed => {
       const a = byId[ed.a], b = byId[ed.b]; if (!a || !b) return;
@@ -554,24 +631,68 @@ class Viewer {
       ed.el.setAttribute('x1', a.x + oax); ed.el.setAttribute('y1', a.y + oay);
       ed.el.setAttribute('x2', b.x + obx); ed.el.setAttribute('y2', b.y + oby);
     });
-    if (this.mode === 'subnode') children.forEach(c => {
-      const p = byId[c.parent]; if (!p) return;
-      c.el.g.setAttribute('transform', `translate(${c.x},${c.y})`);
-      c.link.setAttribute('x1', p.x); c.link.setAttribute('y1', p.y);
-      c.link.setAttribute('x2', c.x); c.link.setAttribute('y2', c.y);
-    });
+    if (this.focus) {
+      const area = this.focus;
+      this.childrenOf(area.id).forEach(c => {
+        c.el.g.setAttribute('transform', `translate(${c.x},${c.y})`);
+        if (c.depth === 0) {                       // 入口施設 → エリア中心のリンク
+          c.link.setAttribute('x1', area.x); c.link.setAttribute('y1', area.y);
+          c.link.setAttribute('x2', c.x); c.link.setAttribute('y2', c.y);
+        }
+      });
+      this.g.childEdges.forEach(e => {
+        if (e.el.style.display === 'none') return;
+        const a = childById[e.a], b = childById[e.b]; if (!a || !b) return;
+        e.el.setAttribute('x1', a.x); e.el.setAttribute('y1', a.y);
+        e.el.setAttribute('x2', b.x); e.el.setAttribute('y2', b.y);
+      });
+    }
   }
 
-  setMode(m) {
-    this.mode = m;
-    const sub = (m === 'subnode');
-    this.g.children.forEach(c => { c.el.g.style.display = sub ? '' : 'none'; c.link.style.display = sub ? '' : 'none'; });
-    this.$('toggle').textContent = 'facility表示: ' + (sub ? 'サブノード' : 'パネル');
+  // エリア相関図の表示状態へ戻す（全エリア表示・子ノード非表示）。
+  _showWorld() {
+    this.g.areas.forEach(m => { m.el.g.style.display = ''; m.el.g.classList.remove('dim', 'sel'); });
+    this.g.edges.forEach(ed => ed.el.style.display = '');
+    this.g.children.forEach(c => { c.el.g.style.display = 'none'; c.link.style.display = 'none'; });
+    this.g.childEdges.forEach(e => e.el.style.display = 'none');
+    this.$('back').style.display = 'none';
+  }
+
+  // エリアをクリック → そのエリアを起点にサブノード相関図を表示。
+  enterFocus(area) {
+    this.focus = area;
+    this.clearHover();
+    const kids = this.childrenOf(area.id);
+    const kidSids = new Set(kids.map(c => c.sid));
+    this.g.areas.forEach(m => { m.el.g.style.display = (m === area) ? '' : 'none'; m.el.g.classList.remove('dim'); });
+    area.el.g.classList.add('sel');
+    this.g.edges.forEach(ed => ed.el.style.display = 'none');
+    this.g.children.forEach(c => {
+      const on = (c.parent === area.id);
+      c.el.g.style.display = on ? '' : 'none';
+      c.link.style.display = (on && c.depth === 0) ? '' : 'none';
+    });
+    this.g.childEdges.forEach(e => {
+      e.el.style.display = (kidSids.has(e.a) && kidSids.has(e.b)) ? '' : 'none';
+    });
+    this.$('back').style.display = '';
+    seedFocus(this.g, area, this.W, this.H);
+    this.alpha = 1; setTimeout(() => this.fit(), 650);
+  }
+
+  exitFocus() {
+    if (!this.focus) return;
+    this.focus.pin = false;                        // 中心固定を解除してエリア相関図へ戻す
+    this.focus = null;
+    this._showWorld();
+    this._seed();                                  // エリア相関図を再配置してから表示
+    this.alpha = 1; setTimeout(() => this.fit(), 800);
   }
 
   childrenOf(id) { return this.g.children.filter(c => c.parent === id); }
 
-  selectNode(n, clientX, clientY) {
+  // マウスオーバー時: 近傍をハイライトしつつ詳細パネルをカーソル付近に表示。
+  hoverNode(n, clientX, clientY) {
     const { areas, edges, adj, byId } = this.g;
     const nb = new Set([n.id]); (adj[n.id] || []).forEach(v => nb.add(v));
     areas.forEach(m => { m.el.g.classList.toggle('dim', !nb.has(m.id)); m.el.g.classList.toggle('sel', m.id === n.id); });
@@ -581,7 +702,6 @@ class Viewer {
       ed.el.setAttribute('marker-end', on ? 'url(#arrowhi)' : 'url(#arrow)');
       if (!ed.oneWay) ed.el.setAttribute('marker-start', on ? 'url(#arrowhi)' : 'url(#arrow)');
     });
-    if (this.mode === 'subnode') this.g.children.forEach(c => c.el.g.classList.toggle('dim', c.parent !== n.id));
     // 詳細パネル（ホップ数は出さない）
     this.$('i-name').textContent = n.label;
     this.$('i-id').textContent = 'id ' + n.id;
@@ -595,6 +715,7 @@ class Viewer {
           return `<div class="it" style="padding-left:${d * 14}px">${guide}<span class="mk ${c.kind}"></span>${c.name}</div>`;
         }).join('')
       : '<div class="it" style="color:var(--ink-dim)">なし</div>';
+    this.$('i-hint').textContent = 'クリックでサブノード相関図';
     const insp = this.$('inspect');
     insp.classList.add('on');
     if (clientX != null && clientY != null) this._placePanel(insp, clientX, clientY);
@@ -615,22 +736,14 @@ class Viewer {
     insp.style.top = y + 'px';
   }
 
-  clearSel() {
+  clearHover() {
     this.g.areas.forEach(m => m.el.g.classList.remove('dim', 'sel'));
     this.g.edges.forEach(ed => {
       ed.el.classList.remove('hi', 'dim');
       ed.el.setAttribute('marker-end', 'url(#arrow)');
       if (!ed.oneWay) ed.el.setAttribute('marker-start', 'url(#arrow)');
     });
-    this.g.children.forEach(c => c.el.g.classList.remove('dim'));
     this.$('inspect').classList.remove('on');
-  }
-
-  focusNode(n) { // ダブルクリック: 中央寄せ + ズーム
-    const k = 1.5; this.view.k = k;
-    this.view.x = this.SVG.clientWidth / 2 - n.x * k;
-    this.view.y = this.SVG.clientHeight / 2 - n.y * k;
-    this.applyView();
   }
 
   _clientToWorld(cx, cy) {
@@ -667,17 +780,16 @@ class Viewer {
     SVG.addEventListener('pointerup', () => {
       const drag = this.drag;
       if (drag && drag.type === 'node') {
-        drag.n.pin = false;
+        // フォーカス中のエリアはアンカーとして固定を保ち、それ以外は固定解除。
+        drag.n.pin = (this.focus && drag.n === this.focus);
         if (!drag.moved) {                           // 動かしていなければクリック扱い
-          const now = Date.now();
-          if (this._lastTap && this._lastTap.n === drag.n && now - this._lastTap.t < 300) {
-            this.focusNode(drag.n); this._lastTap = null;   // 連続タップ＝フォーカス
-          } else {
-            this.selectNode(drag.n, drag.sx, drag.sy); this._lastTap = { n: drag.n, t: now };
-          }
-        }
+          if (this.focus) { if (drag.n === this.focus) this.exitFocus(); }
+          else this.enterFocus(drag.n);
+        } else if (!this.focus) this.clearHover();
       }
-      if (drag && drag.type === 'pan' && !drag.moved) this.clearSel();
+      if (drag && drag.type === 'pan' && !drag.moved) {
+        if (this.focus) this.exitFocus(); else this.clearHover();
+      }
       this.drag = null; SVG.classList.remove('panning');
     });
     SVG.addEventListener('wheel', e => {
@@ -695,16 +807,17 @@ class Viewer {
 
   _wireToolbar() {
     this.$('fit').onclick = () => this.fit();
-    this.$('relayout').onclick = () => { this._seed(); this.alpha = 1; setTimeout(() => this.fit(), 800); };
-    this.$('toggle').onclick = () => {
-      this.setMode(this.mode === 'panel' ? 'subnode' : 'panel');
-      this._seed(); this.alpha = 1; setTimeout(() => this.fit(), 700);
+    this.$('relayout').onclick = () => {
+      if (this.focus) seedFocus(this.g, this.focus, this.W, this.H);
+      else this._seed();
+      this.alpha = 1; setTimeout(() => this.fit(), 800);
     };
+    this.$('back').onclick = () => this.exitFocus();
   }
 
   fit() {
     if (!this.g) return;
-    const list = this.mode === 'subnode' ? [...this.g.areas, ...this.g.children] : this.g.areas;
+    const list = this.focus ? [this.focus, ...this.childrenOf(this.focus.id)] : this.g.areas;
     if (!list.length) return;
     let a = 1e9, b = 1e9, c = -1e9, d = -1e9;
     list.forEach(n => {

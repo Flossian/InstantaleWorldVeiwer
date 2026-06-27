@@ -15,7 +15,7 @@
   </div>
   <div class="toolbar">
     <button class="btn" id="reopen">ファイルを開く</button>
-    <button class="btn primary" id="toggle">facility表示: パネル</button>
+    <button class="btn primary" id="back" style="display:none">← エリア相関図に戻る</button>
     <button class="btn" id="fit">フィット</button>
     <button class="btn" id="relayout">再配置</button>
     <span class="legend" id="legend"></span>
@@ -28,13 +28,14 @@
         <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#2c3340"/></pattern>
       </defs>
       <g id="world"><rect x="-4000" y="-4000" width="8000" height="8000" fill="url(#dots)"/>
-        <g id="clinks"></g><g id="edges"></g><g id="children"></g><g id="nodes"></g></g>
+        <g id="clinks"></g><g id="cedges"></g><g id="edges"></g><g id="children"></g><g id="nodes"></g></g>
     </svg>
 
     <div class="inspect" id="inspect">
       <h4 id="i-name">—</h4><div class="meta" id="i-id">id —</div>
       <div class="row"><span>接続</span><b id="i-adj">—</b></div>
       <div class="sub"><h5 id="i-subh">施設 / ダンジョン</h5><div id="i-sub"></div></div>
+      <div class="phint" id="i-hint"></div>
     </div>
 
     <div class="loader" id="loader">

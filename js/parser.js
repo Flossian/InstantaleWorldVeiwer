@@ -23,28 +23,45 @@ function values(container) {
 }
 
 // ノード内の施設を、entrance_facility を根として connections を辿った
-// 階層（pre-order DFS）に並べ、各施設へ depth を付けて返す。
+// 階層（pre-order DFS）に並べ、各施設へ depth と一意な sid を付けて返す。
+// あわせて施設どうしの接続（相関図用エッジ・双方向・重複除去）も返す。
+//   areaId / nidx は sid を全体で一意にするための名前空間。
 // 施設は辞書（キー=id）想定。connections は同一ノード内の施設 id 配列（双方向）。
-function facilityHierarchy(node) {
+function facilityGraph(node, areaId, nidx) {
   const facs = node && node.facilities;
+  const mk = fid => `${areaId}:${nidx}:${fid}`;
   if (!facs || typeof facs !== 'object' || Array.isArray(facs)) {
-    // 想定外（配列など）はフラット扱い（depth=0）。
-    return values(facs).map(f => ({ f, depth: 0 }));
+    // 想定外（配列など）はフラット扱い（depth=0・エッジ無し）。
+    const items = values(facs).map((f, i) => ({ f, depth: 0, sid: mk(i) }));
+    return { items, edges: [] };
   }
-  const out = [];
+  const items = [];
   const visited = new Set();
   const visit = (fid, depth) => {
     const f = facs[fid];
     if (!f || visited.has(fid)) return;
     visited.add(fid);
-    out.push({ f, depth });
+    items.push({ f, depth, sid: mk(fid) });
     (f.connections || []).forEach(c => visit(String(c), depth + 1));
   };
   const ids = Object.keys(facs);
   const root = node.entrance_facility != null ? String(node.entrance_facility) : ids[0];
   visit(root, 0);
   ids.forEach(id => { if (!visited.has(id)) visit(id, 0); }); // 孤立施設は根として追加
-  return out;
+
+  // 施設間エッジ（connections 全件・無向で重複除去）。
+  const edges = [];
+  const seen = new Set();
+  ids.forEach(fid => {
+    (facs[fid].connections || []).forEach(c => {
+      const cid = String(c);
+      if (!facs[cid]) return;
+      const key = fid < cid ? fid + '|' + cid : cid + '|' + fid;
+      if (seen.has(key)) return; seen.add(key);
+      edges.push({ a: mk(fid), b: mk(cid) });
+    });
+  });
+  return { items, edges };
 }
 
 // 既に整形済み（areas が配列で label を持つ）かどうか。
@@ -60,13 +77,15 @@ export function parseWorld(json) {
     return {
       areas: obj.areas.map(a => ({ id: Number(a.id), label: String(a.label ?? '#' + a.id), start: !!a.start })),
       edges: obj.edges.map(e => ({ a: Number(e.a), b: Number(e.b), ...(e.directed !== undefined ? { directed: !!e.directed } : {}) })),
-      children: (obj.children || []).map(c => ({ name: String(c.name ?? '?'), parent: Number(c.parent), kind: c.kind === 'd' ? 'd' : 'f', depth: Number(c.depth) || 0 })),
+      children: (obj.children || []).map((c, i) => ({ name: String(c.name ?? '?'), parent: Number(c.parent), kind: c.kind === 'd' ? 'd' : 'f', depth: Number(c.depth) || 0, sid: c.sid != null ? String(c.sid) : 'p' + i })),
+      childEdges: (obj.childEdges || []).map(e => ({ a: String(e.a), b: String(e.b) })),
     };
   }
 
   const rawAreas = values(obj.areas);
   const areas = [];
   const children = [];
+  const childEdges = [];        // 施設どうしの接続（相関図用・sid ペア）
   const seen = new Set();       // エッジ重複除去（"min-max"）
   const edges = [];
 
@@ -91,29 +110,34 @@ export function parseWorld(json) {
       edges.push({ a: id, b });
     });
 
-    // 施設 / ダンジョン（nodes[*] の facilities を階層化）。
-    values(a.nodes).forEach(node => {
-      facilityHierarchy(node).forEach(({ f, depth }) => {
+    // 施設 / ダンジョン（nodes[*] の facilities を階層化 + 施設間エッジ）。
+    values(a.nodes).forEach((node, nidx) => {
+      const { items, edges: fEdges } = facilityGraph(node, id, nidx);
+      items.forEach(({ f, depth, sid }) => {
         children.push({
           name: String(f.name ?? '?'),
           parent: id,
           kind: f.facility_type === DUNGEON_FACILITY_TYPE ? 'd' : 'f',
           ftype: f.facility_type,
           depth,
+          sid,
         });
       });
+      fEdges.forEach(e => childEdges.push(e));
     });
   });
 
-  return { areas, edges, children };
+  return { areas, edges, children, childEdges };
 }
 
 // 中立データ → 表示用グラフ（hop/arm/col 付与, byId, adj, START, maxHop）。
 export function buildGraph(data) {
   const areas = data.areas.map(a => ({ ...a }));
   const edges = data.edges.map(e => ({ ...e }));
-  const children = (data.children || []).map(c => ({ ...c }));
+  const children = (data.children || []).map((c, i) => ({ ...c, sid: c.sid != null ? String(c.sid) : 'c' + i }));
+  const childEdges = (data.childEdges || []).map(e => ({ a: String(e.a), b: String(e.b) }));
   const byId = Object.fromEntries(areas.map(n => [n.id, n]));
+  const childById = Object.fromEntries(children.map(c => [c.sid, c]));
 
   const START = byId[FIXED_START_ID] ? FIXED_START_ID : Math.min(...areas.map(a => a.id));
   areas.forEach(a => { a.start = (a.id === START); });
@@ -148,10 +172,9 @@ export function buildGraph(data) {
     n.col = hopColor(n.hop, maxHop);
   });
 
-  let cseq = 0;
-  children.forEach(c => (c.cid = 'c' + (cseq++)));
+  children.forEach(c => (c.cid = c.sid));   // 反発計算用の識別子（sid を流用）
 
-  return { areas, edges, children, byId, adj, START, maxHop };
+  return { areas, edges, children, childEdges, byId, childById, adj, START, maxHop };
 }
 
 // ホップ数 → 色。開始は専用色、到達不能は灰、それ以外は色相ランプ。
