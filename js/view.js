@@ -194,7 +194,7 @@ export class Viewer {
     });
     this.$('back').style.display = '';
     seedFocus(this.g, area, this.W, this.H);
-    this.alpha = 1; setTimeout(() => this.fit(), 650);
+    this.alpha = 1;
   }
 
   exitFocus() {
@@ -202,8 +202,8 @@ export class Viewer {
     this.focus.pin = false;                        // 中心固定を解除してエリア相関図へ戻す
     this.focus = null;
     this._showWorld();
-    this._seed();                                  // エリア相関図を再配置してから表示
-    this.alpha = 1; setTimeout(() => this.fit(), 800);
+    this._seed();                                  // エリア相関図を再配置してから表示（フィットはしない）
+    this.alpha = 1;
   }
 
   childrenOf(id) { return this.g.children.filter(c => c.parent === id); }
@@ -319,7 +319,6 @@ export class Viewer {
       this.view.y = my - (my - this.view.y) * (nk / this.view.k);
       this.view.k = nk; this.applyView();
     }, { passive: false });
-    window.addEventListener('resize', () => this.fit());
   }
 
   _wireToolbar() {
@@ -327,7 +326,7 @@ export class Viewer {
     this.$('relayout').onclick = () => {
       if (this.focus) seedFocus(this.g, this.focus, this.W, this.H);
       else this._seed();
-      this.alpha = 1; setTimeout(() => this.fit(), 800);
+      this.alpha = 1;
     };
     this.$('back').onclick = () => this.exitFocus();
   }
