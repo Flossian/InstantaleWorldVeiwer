@@ -7,7 +7,7 @@ Instantale のセーブデータから「エリア接続相関図」を表示す
 
 次のどちらかで開きます。
 
-- 公開 URL（GitHub Pages）にアクセスする。
+- https://flossian.github.io/InstantaleWorldVeiwer/ にアクセスする。
 - `instantale_world_viewer.html` をダウンロードし、ダブルクリックで開く（ローカルでそのまま動きます）。
 
 開いたら、**Instantale のセーブを画面にドラッグ&ドロップ**（またはクリックして選択）するだけです。
