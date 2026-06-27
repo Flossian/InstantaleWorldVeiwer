@@ -137,6 +137,8 @@ export class Viewer {
     requestAnimationFrame(() => this._tick());
   }
 
+  // 毎フレーム呼ばれる描画。位置だけを更新し、表示/非表示は _showWorld / enterFocus 側が制御する
+  // （非表示要素の座標も更新するが SVG では描画されないため害は無い）。
   render() {
     const { areas, edges, byId, childById } = this.g;
     areas.forEach(n => n.el.g.setAttribute('transform', `translate(${n.x},${n.y})`));
@@ -294,10 +296,13 @@ export class Viewer {
         drag.moved = true; this.applyView();
       }
     });
+    // pointerup の振り分け:
+    //   ノードを動かさず離した = クリック → エリア相関図ならフォーカス、フォーカス中で中心エリアなら戻る。
+    //   ノードを動かした        = ドラッグ確定（フォーカス中のエリアだけは固定を維持）。
+    //   背景をその場でクリック   = フォーカス中なら戻る / それ以外はハイライト解除。
     SVG.addEventListener('pointerup', () => {
       const drag = this.drag;
       if (drag && drag.type === 'node') {
-        // フォーカス中のエリアはアンカーとして固定を保ち、それ以外は固定解除。
         drag.n.pin = (this.focus && drag.n === this.focus);
         if (!drag.moved) {                           // 動かしていなければクリック扱い
           if (this.focus) { if (drag.n === this.focus) this.exitFocus(); }

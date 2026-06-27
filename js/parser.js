@@ -130,7 +130,12 @@ export function parseWorld(json) {
   return { areas, edges, children, childEdges };
 }
 
-// 中立データ → 表示用グラフ（hop/arm/col 付与, byId, adj, START, maxHop）。
+// 中立データ → 表示用グラフ。返り値:
+//   areas/edges        … エリアと接続（エリア相関図用）
+//   children/childEdges … 施設ノードと施設間接続（サブノード相関図用。端点は sid）
+//   byId/childById     … id → エリア / sid → 施設 の逆引き
+//   adj/START/maxHop   … 隣接リスト / 開始エリア id / 最大ホップ数
+// 各エリアへ hop（開始からの距離）・arm（放射角）・col（色）を付与する。
 export function buildGraph(data) {
   const areas = data.areas.map(a => ({ ...a }));
   const edges = data.edges.map(e => ({ ...e }));
@@ -171,8 +176,6 @@ export function buildGraph(data) {
     n.arm = arm[n.id] ?? Math.random() * 6.28;
     n.col = hopColor(n.hop, maxHop);
   });
-
-  children.forEach(c => (c.cid = c.sid));   // 反発計算用の識別子（sid を流用）
 
   return { areas, edges, children, childEdges, byId, childById, adj, START, maxHop };
 }

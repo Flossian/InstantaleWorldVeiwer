@@ -111,7 +111,7 @@ svg{display:block;width:100%;height:100%;touch-action:none;cursor:grab}svg.panni
       </div>
     </div>
   </div>
-  <div class="footer">セーブをドロップすると自動で復号（XOR・C# Common.cs 準拠）して表示します。すべてブラウザ内で完結し、サーバ送信はありません。</div>
+  <div class="footer">セーブをドロップすると自動で読み込んで表示します。すべてブラウザ内で完結し、サーバ送信はありません。</div>
 </div>
 
 <script>
@@ -264,7 +264,12 @@ function parseWorld(json) {
   return { areas, edges, children, childEdges };
 }
 
-// 中立データ → 表示用グラフ（hop/arm/col 付与, byId, adj, START, maxHop）。
+// 中立データ → 表示用グラフ。返り値:
+//   areas/edges        … エリアと接続（エリア相関図用）
+//   children/childEdges … 施設ノードと施設間接続（サブノード相関図用。端点は sid）
+//   byId/childById     … id → エリア / sid → 施設 の逆引き
+//   adj/START/maxHop   … 隣接リスト / 開始エリア id / 最大ホップ数
+// 各エリアへ hop（開始からの距離）・arm（放射角）・col（色）を付与する。
 function buildGraph(data) {
   const areas = data.areas.map(a => ({ ...a }));
   const edges = data.edges.map(e => ({ ...e }));
@@ -306,8 +311,6 @@ function buildGraph(data) {
     n.col = hopColor(n.hop, maxHop);
   });
 
-  children.forEach(c => (c.cid = c.sid));   // 反発計算用の識別子（sid を流用）
-
   return { areas, edges, children, childEdges, byId, childById, adj, START, maxHop };
 }
 
@@ -319,7 +322,10 @@ function hopColor(h, maxHop) {
   return `hsl(${(158 + t * 180).toFixed(0)},52%,52%)`;
 }
 // layout.js — 自前の力指向レイアウト（外部グラフライブラリ非依存）
-// 開始ノードを中心に「ホップ数 × 腕角度」で放射状に初期配置 → 反発/バネ/中心引力で自動収束。
+// 2 つのモードを持つ:
+//   エリア相関図（focus=null）  … 開始ノードを中心に「ホップ数 × 腕角度」で放射状に初期配置。
+//   サブノード相関図（focus=エリア）… そのエリアを中心に固定し、配下の施設のみを配置。
+// いずれも 反発 / バネ / 中心引力 で自動収束させ、矩形の重なりは separate() で解消する。
 
 const P = {
   kRep: 10000,      // ノード間反発
@@ -620,6 +626,8 @@ class Viewer {
     requestAnimationFrame(() => this._tick());
   }
 
+  // 毎フレーム呼ばれる描画。位置だけを更新し、表示/非表示は _showWorld / enterFocus 側が制御する
+  // （非表示要素の座標も更新するが SVG では描画されないため害は無い）。
   render() {
     const { areas, edges, byId, childById } = this.g;
     areas.forEach(n => n.el.g.setAttribute('transform', `translate(${n.x},${n.y})`));
@@ -777,10 +785,13 @@ class Viewer {
         drag.moved = true; this.applyView();
       }
     });
+    // pointerup の振り分け:
+    //   ノードを動かさず離した = クリック → エリア相関図ならフォーカス、フォーカス中で中心エリアなら戻る。
+    //   ノードを動かした        = ドラッグ確定（フォーカス中のエリアだけは固定を維持）。
+    //   背景をその場でクリック   = フォーカス中なら戻る / それ以外はハイライト解除。
     SVG.addEventListener('pointerup', () => {
       const drag = this.drag;
       if (drag && drag.type === 'node') {
-        // フォーカス中のエリアはアンカーとして固定を保ち、それ以外は固定解除。
         drag.n.pin = (this.focus && drag.n === this.focus);
         if (!drag.moved) {                           // 動かしていなければクリック扱い
           if (this.focus) { if (drag.n === this.focus) this.exitFocus(); }
