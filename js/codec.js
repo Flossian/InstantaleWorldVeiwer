@@ -1,4 +1,4 @@
-// codec.js — セーブ復号（C# Common.cs 準拠）。ワンクリック表示版（パスフレーズ不要）。
+// codec.js — セーブ復号（C# Common.cs 準拠）。ワンクリック表示版。
 //
 // Common.cs の実装（確定）:
 //   - 難読化はアーカイブ無し。ファイル全体に対する「繰り返し XOR」のみ。
@@ -61,7 +61,7 @@ function looksLikePlainJson(bytes) {
   return i < bytes.length && (bytes[i] === 0x7b /*{*/ || bytes[i] === 0x5b /*[*/);
 }
 
-// セーブ復号。戻り値は JSON 文字列（パスフレーズ不要・自動判定）。
+// セーブ復号。戻り値は JSON 文字列（平文/難読化を自動判定）。
 // 平文 JSON ならそのまま、難読化なら鍵を自動取得して XOR 復号（Common.cs Load 準拠）。
 export async function decodeSave(file, keyblob) {
   const bytes = new Uint8Array(await file.arrayBuffer());
