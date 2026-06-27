@@ -1,7 +1,7 @@
 :root{
   --bg:#1b1f27;--panel:#232934;--panel-2:#1f2530;--line:#39414f;--ink:#e7ebf2;--ink-dim:#8d97a8;
   --edge:#5b6576;--edge-hi:#63c6da;--ring:#f1f4fa;--chrome:#2b323d;
-  --fac:#d6a13a;--dun:#c25a78;--accent:#4d7ea8;--start:#e8e3c0;
+  --fac:#d6a13a;--dun:#c25a78;--accent:#4d7ea8;--start:#7a6a2e;
 }
 *{box-sizing:border-box} html,body{margin:0;height:100%}
 body{background:var(--bg);color:var(--ink);font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
