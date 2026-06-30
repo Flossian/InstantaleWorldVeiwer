@@ -3,6 +3,7 @@ import { buildGraph, hopColor } from './parser.js';
 import { seed, seedFocus, step, boundary } from './layout.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
+const SETTLE_MS = 5000;   // 操作後この時間が経過したらレイアウト計算を停止する
 
 export class Viewer {
   constructor(root = document) {
@@ -16,6 +17,7 @@ export class Viewer {
     this.view = { x: 0, y: 0, k: 1 };
     this.W = 900; this.H = 560;
     this.alpha = 1; this.running = false;
+    this.settleUntil = 0;                            // この時刻を過ぎたら計算停止（操作のたびに延長）
     this.drag = null;
 
     this._wireGlobalInput();
@@ -33,6 +35,14 @@ export class Viewer {
     this._buildLegend(); this._buildAreas(); this._buildAreaEdges(); this._buildChildren(); this._buildChildEdges();
     this.focus = null; this._showWorld();
     this._seed(); this.applyView(); this.render(); this.fit();
+    this._energize();
+  }
+
+  // 操作によりレイアウトを再加熱し、沈静化タイマーを延長する。
+  // 必要ならアニメーションループを再始動する。
+  _energize(alpha = 1) {
+    this.alpha = Math.max(this.alpha, alpha);
+    this.settleUntil = performance.now() + SETTLE_MS;
     if (!this.running) { this.running = true; requestAnimationFrame(() => this._tick()); }
   }
 
@@ -133,8 +143,13 @@ export class Viewer {
   }
 
   _tick() {
-    if (this.g) { this.alpha = step(this.g, this.focus, this.alpha, this.W, this.H); this.render(); }
-    requestAnimationFrame(() => this._tick());
+    // 沈静化時刻を過ぎたら計算・再描画を止めてループを終了する（操作で再始動）。
+    if (this.g && performance.now() < this.settleUntil) {
+      this.alpha = step(this.g, this.focus, this.alpha, this.W, this.H); this.render();
+      requestAnimationFrame(() => this._tick());
+    } else {
+      this.running = false;
+    }
   }
 
   // 毎フレーム呼ばれる描画。位置だけを更新し、表示/非表示は _showWorld / enterFocus 側が制御する
@@ -196,7 +211,7 @@ export class Viewer {
     });
     this.$('back').style.display = '';
     seedFocus(this.g, area, this.W, this.H);
-    this.alpha = 1;
+    this._energize();
   }
 
   exitFocus() {
@@ -205,7 +220,7 @@ export class Viewer {
     this.focus = null;
     this._showWorld();
     this._seed();                                  // エリア相関図を再配置してから表示（フィットはしない）
-    this.alpha = 1;
+    this._energize();
   }
 
   childrenOf(id) { return this.g.children.filter(c => c.parent === id); }
@@ -274,7 +289,7 @@ export class Viewer {
     e.stopPropagation(); this.SVG.setPointerCapture(e.pointerId);
     const w = this._clientToWorld(e.clientX, e.clientY);
     this.drag = { type: 'node', n, dx: n.x - w.x, dy: n.y - w.y, sx: e.clientX, sy: e.clientY, moved: false };
-    n.pin = true; this.alpha = Math.max(this.alpha, 0.5);
+    n.pin = true; this._energize(0.5);
   }
 
   _wireGlobalInput() {
@@ -289,6 +304,7 @@ export class Viewer {
       if (drag.type === 'node') {
         const w = this._clientToWorld(e.clientX, e.clientY);
         drag.n.x = w.x + drag.dx; drag.n.y = w.y + drag.dy;
+        this.settleUntil = performance.now() + SETTLE_MS;   // ドラッグ中は停止しない（離してから5秒で停止）
         if (Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) > 4) drag.moved = true;
       } else {
         this.view.x = drag.ox + (e.clientX - drag.sx);
@@ -331,7 +347,7 @@ export class Viewer {
     this.$('relayout').onclick = () => {
       if (this.focus) seedFocus(this.g, this.focus, this.W, this.H);
       else this._seed();
-      this.alpha = 1;
+      this._energize();
     };
     this.$('back').onclick = () => this.exitFocus();
   }
