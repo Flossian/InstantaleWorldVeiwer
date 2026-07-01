@@ -1,5 +1,5 @@
 // view.js — SVG 描画と操作（ホバーでパネル / クリックでサブノード相関図へ / パン・ズーム・フィット・ドラッグ）
-import { buildGraph, hopColor } from './parser.js';
+import { buildGraph } from './parser.js';
 import { seed, seedFocus, step, boundary } from './layout.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -54,11 +54,11 @@ export class Viewer {
 
   _buildLegend() {
     let h = `<span class="sw"><i style="background:var(--start)"></i>開始</span>`;
-    for (let i = 1; i <= this.g.maxHop; i++)
-      h += `<span class="sw"><i style="background:${hopColor(i, this.g.maxHop)}"></i>${i}ホップ</span>`;
+    h += `<span class="sw"><i style="background:hsl(218,52%,52%)"></i>village</span>`;
+    h += `<span class="sw"><i style="background:hsl(278,52%,52%)"></i>town</span>`;
+    h += `<span class="sw"><i style="background:hsl(338,52%,52%)"></i>city</span>`;
     h += `<span class="sw"><i style="background:#6b7280"></i>到達不能</span>`;
     h += `<span class="sw"><i style="background:var(--fac);border-radius:2px"></i>施設</span>`;
-    h += `<span class="sw"><i class="di" style="background:var(--dun)"></i>ダンジョン</span>`;
     h += `<span class="sw">↔ 双方向</span>`;
     this.$('legend').innerHTML = h;
   }

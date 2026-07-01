@@ -135,7 +135,7 @@ export function parseWorld(json) {
 //   children/childEdges … 施設ノードと施設間接続（サブノード相関図用。端点は sid）
 //   byId/childById     … id → エリア / sid → 施設 の逆引き
 //   adj/START/maxHop   … 隣接リスト / 開始エリア id / 最大ホップ数
-// 各エリアへ hop（開始からの距離）・arm（放射角）・col（色）を付与する。
+// 各エリアへ hop（開始からの距離）・arm（放射角）・col（size 別の色）を付与する。
 export function buildGraph(data) {
   const areas = data.areas.map(a => ({ ...a }));
   const edges = data.edges.map(e => ({ ...e }));
@@ -174,16 +174,20 @@ export function buildGraph(data) {
   areas.forEach(n => {
     n.hop = dist[n.id];                 // undefined = 到達不能（灰）
     n.arm = arm[n.id] ?? Math.random() * 6.28;
-    n.col = hopColor(n.hop, maxHop);
+    n.col = sizeColor(n);
   });
 
   return { areas, edges, children, childEdges, byId, childById, adj, START, maxHop };
 }
 
-// ホップ数 → 色。開始は専用色、到達不能は灰、それ以外は色相ランプ。
-export function hopColor(h, maxHop) {
-  if (h === undefined) return '#6b7280';        // 到達不能
-  if (h === 0) return 'var(--start)';           // 開始（専用色）
-  const t = maxHop ? h / maxHop : 0;
-  return `hsl(${(158 + t * 180).toFixed(0)},52%,52%)`;
+// エリアの size → 色。開始は専用色、到達不能は灰、それ以外は size 別の固定色。
+export function sizeColor(n) {
+  if (n.hop === undefined) return '#6b7280';    // 到達不能
+  if (n.start) return 'var(--start)';           // 開始（専用色）
+  switch (n.size) {
+    case 'village': return 'hsl(218,52%,52%)';  // 青（旧ホップ配色の hop1 相当）
+    case 'town': return 'hsl(278,52%,52%)';     // 紫（旧ホップ配色の hop2 相当）
+    case 'city': return 'hsl(338,52%,52%)';     // 赤紫（旧ホップ配色の hop3(最遠) 相当）
+    default: return '#6b7280';
+  }
 }
